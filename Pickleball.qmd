@@ -1,0 +1,138 @@
+---
+title: "Dashboard Pickle Ball"
+format: html
+editor: visual
+---
+
+```{r}
+#install.packages("shinydashboard")
+```
+
+```{r}
+library(shinydashboard)
+```
+
+```{r}
+library(shiny)
+library(shinydashboard)
+library(ggplot2)
+library(tidyverse)
+library(fresh)
+```
+
+```{r}
+install.packages("fresh")
+```
+
+```{r}
+Pickleballsort$Price <- as.numeric(gsub("\\$", "", pickleball_data$Price))
+```
+
+```{r}
+Pickleballsort$Power.Percentile <- as.numeric(gsub("\\%", "", pickleball_data$Power.Percentile))
+```
+
+```{r}
+my_theme <- create_theme(
+  adminlte_color(
+    light_blue = "#FF69B4"  # Pink color
+  ),
+  adminlte_sidebar(
+    dark_bg = "#FF1493",  # Darker pink for sidebar
+    dark_hover_bg = "#FF69B4",
+    dark_color = "#FFFFFF"
+  ),
+  adminlte_global(
+    content_bg = "#FFF0F5",  # Light pink background
+    box_bg = "#FFC0CB",  # Pink boxes
+    info_box_bg = "#FFB6C1"
+  )
+)
+
+ui <- dashboardPage(
+  dashboardHeader(title = "How To Choose Paddle"),
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("All Filters", tabName = "all"),
+      menuItem("Common Filters", tabName = "Common")
+    )
+  ),
+  dashboardBody(
+    tags$head(
+      tags$style(HTML("
+        .skin-blue .main-header .navbar { background-color: #FF69B4 !important; }
+        .skin-blue .main-header .logo { background-color: #FF1493 !important; }
+        .skin-blue .main-sidebar { background-color: #FFC0CB !important; }
+        .box { background-color: #FFF0F5 !important; border-color: #FF69B4 !important; }
+      "))
+    ),
+    tabItems(
+      tabItem(
+        tabName = "all",
+        fluidRow(
+          box(selectInput("Shape", "Select Paddle Type:", choices = unique(Pickleballsort$Shape)), width = 4),
+          box(selectInput("Condition", "Select Paddle Condition:", choices = unique(Pickleballsort$Condition)), width = 4),
+          box(
+            sliderInput("Price", "Select Price Range:",
+                        min = min(Pickleballsort$Price, na.rm = TRUE),
+                        max = max(Pickleballsort$Price, na.rm = TRUE),
+                        value = c(min(Pickleballsort$Price, na.rm = TRUE), max(Pickleballsort$Price, na.rm = TRUE))), width = 4)
+        ),
+        fluidRow(
+          box(
+            sliderInput("Power", "Select Power Level:",
+                        min = min(Pickleballsort$`Power.Percentile`, na.rm = TRUE),
+                        max = max(Pickleballsort$`Power.Percentile`, na.rm = TRUE),
+                        value = c(min(Pickleballsort$`Power.Percentile`, na.rm = TRUE), max(Pickleballsort$`Power.Percentile`, na.rm = TRUE))), width = 4)
+        ),
+        fluidRow(
+          box(tableOutput("recommended_paddle"), width = 12)
+        ),
+        fluidRow(
+          box(plotOutput("paddle_plot"), width = 12)
+        )
+      )
+    )
+  )
+)
+# Server
+server <- function(input, output) {  
+  recommended_paddle <- reactive({
+    req(input$Shape, input$Condition, input$Price, input$Power)
+    
+    filtered <- Pickleballsort |> 
+      filter(Price >= input$Price[1] & Price <= input$Price[2], 
+             Shape == input$Shape, 
+             Condition == input$Condition, 
+             `Power.Percentile` >= input$Power[1] & `Power.Percentile` <= input$Power[2])
+    
+    if (nrow(filtered) > 0) {
+      return(filtered[which.max(filtered$`Power.Percentile`), ])
+    } else {
+      return(data.frame(Message = "No matching paddle found"))
+    }
+  })
+
+  output$recommended_paddle <- renderTable({
+    recommended_paddle()
+  })
+
+  output$paddle_plot <- renderPlot({
+    req(input$Shape, input$Condition, input$Price, input$Power)
+    
+    filtered_data <- Pickleballsort |> 
+      filter(Price >= input$Price[1] & Price <= input$Price[2], 
+             Shape == input$Shape, 
+             Condition == input$Condition, 
+             `Power.Percentile` >= input$Power[1] & `Power.Percentile` <= input$Power[2])
+    
+    ggplot(filtered_data, aes(x = Price, y = `Power.Percentile`)) +
+      geom_point(color = "blue") +
+      geom_smooth(method = "lm", se = FALSE, color = "red") +
+      labs(title = "Price vs Power Percentile", x = "Price", y = "Power Percentile")
+  })
+}
+
+# Run the Shiny App
+shinyApp(ui, server)
+```
